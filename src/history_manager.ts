@@ -1,5 +1,7 @@
+import { config } from "./config";
 import { GeminiClient } from "./gemini_client";
 import { Content, ContentModel } from "./models/content.model";
+import fs from "fs";
 
 export class HistoryManager {
 
@@ -12,6 +14,9 @@ export class HistoryManager {
   constructor(
     private _client: GeminiClient
   ) {
+    // if (fs.existsSync("data/history.json")) {
+    //   this.deserialize(JSON.parse(fs.readFileSync("data/history.json", "utf-8")));
+    // }
   }
 
   private serialize() {
@@ -22,13 +27,31 @@ export class HistoryManager {
     return contents;
   }
 
+  private deserialize(contents: Content[]) {
+    this.contents = [];
+    for (const content of contents) {
+      this.contents.push(new ContentModel(content.role, content.parts));
+    }
+  }
+
   addText(role: "model" | "user" = "model", text: string) {
     this.contents.push(new ContentModel(role, [{ text }]));
     return this;
   }
 
-  addImage() {
-    throw new Error("Method not implemented.");
+  addImage(mimeType: "image/png" | "image/jpeg", data: string, text?: string) {
+    const parts: any = [
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data
+        }
+      }
+    ];
+    if (text) {
+      parts.push({ text });
+    }
+    this.contents.push(new ContentModel("user", parts));
     return this;
   }
 
@@ -53,64 +76,10 @@ export class HistoryManager {
   }
 
   getResponse() {
+    fs.writeFileSync("data/history.json", JSON.stringify(this.serialize()));
     return this._client.send({
       model: "gemini-2.5-pro-preview-03-25",
-      config: {
-        responseMimeType: "text/plain",
-        systemInstruction: [
-          {
-            text: `Você é um agente de I.A, pronto para executar qualquer tipo de tarefa.`,
-          }
-        ],
-        tools: [
-          {
-            functionDeclarations: [
-              {
-                name: "create_file",
-                description: "Cria um arquivo no computador.",
-                parameters: {
-                  type: "OBJECT",
-                  required: ["path"],
-                  properties: {
-                    path: {
-                      type: "STRING"
-                    },
-                    content: {
-                      type: "STRING"
-                    }
-                  },
-                }
-              },
-              {
-                name: "execute_command",
-                description: "Executa um comando no computador.",
-                parameters: {
-                  type: "OBJECT",
-                  required: ["command"],
-                  properties: {
-                    command: {
-                      type: "STRING"
-                    }
-                  },
-                }
-              },
-              {
-                name: "read_file",
-                description: "Lê um arquivo do computador.",
-                parameters: {
-                  type: "OBJECT",
-                  required: ["path"],
-                  properties: {
-                    path: {
-                      type: "STRING"
-                    }
-                  },
-                }
-              }
-            ],
-          }
-        ]
-      },
+      config: config,
       contents: this.serialize()
     });
   }

@@ -11,11 +11,13 @@
   "description": "",
   "dependencies": {
     "readline-sync": "^1.4.10",
+    "screenshot-desktop": "^1.15.1",
     "ts-node": "^10.9.2",
     "uuid": "^11.1.0",
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/screenshot-desktop": "^1.12.3",
     "@types/ws": "^8.18.1",
     "typescript": "^5.8.3"
   }

@@ -17,7 +17,7 @@ interface ObjectType {
   }
 }
 
-interface FunctionDeclaration {
+export interface FunctionDeclaration {
   name: string;
   description: string;
   parameters: ObjectType;

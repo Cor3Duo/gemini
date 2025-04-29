@@ -4,6 +4,13 @@ interface TextPart {
   text: string;
 }
 
+interface InlineDataPart {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  }
+}
+
 interface FunctionCallPart {
   functionCall: {
     name: string;
@@ -20,14 +27,14 @@ interface FunctionResponsePart {
 
 export type Content = {
   role: Role,
-  parts: TextPart[] | FunctionCallPart[] | FunctionResponsePart[]
+  parts: (TextPart | FunctionCallPart | FunctionResponsePart | InlineDataPart)[]
 }
 
 export class ContentModel {
 
   constructor(
     public role: Role,
-    public parts: TextPart[] | FunctionCallPart[] | FunctionResponsePart[]
+    public parts: (TextPart | FunctionCallPart | FunctionResponsePart | InlineDataPart)[]
   ) { }
 
   serialize(): Content {

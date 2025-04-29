@@ -2,16 +2,14 @@ import { WebSocketServer } from 'ws';
 import readline from 'readline/promises';
 import { GeminiClient } from './gemini_client';
 import fs from 'fs';
-import { exec } from 'child_process';
-
-type Callback = (...args: any[]) => void;
+import { execSync } from 'child_process';
+import screenshot from 'screenshot-desktop';
+import path from 'path';
 
 const PORT = 9090;
-const REQUEST_TIMEOUT_MS = 30000;
 
 const clients: Map<number, GeminiClient> = new Map();
 let nextClientId = 1;
-let pendingRequest: Callback | null = null;
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -77,22 +75,73 @@ wss.on('error', (error) => {
 
       response.text && client.historyManager.addText('model', response.text);
 
-      if (response.functionCalls) {
+      while (response.functionCalls) {
+        console.log(response.functionCalls);
         for (const call of response.functionCalls) {
           client.historyManager.addFunctionCall(call.name, call.args);
           switch (call.name) {
             case 'create_file':
-              fs.writeFileSync(call.args.path, call.args.content);
+              fs.writeFileSync(call.args.path, call.args.content || '');
               client.historyManager.addFunctionResponse(call.name, 'File created successfully.');
               break;
             case 'execute_command':
-              exec(call.args.command, (error, stdout, stderr) => {
+              try {
+                const stdout = execSync(call.args.command, { encoding: 'utf-8' });
                 client.historyManager.addFunctionResponse(call.name, stdout);
                 console.log(`Gemini (Client ${targetClientId}) > ${stdout}`);
-              });
+              } catch (error: any) {
+                client.historyManager.addFunctionResponse(call.name, error.message);
+                console.log(`Gemini (Client ${targetClientId}) > ${error.message}`);
+              }
               break;
             case 'read_file':
               client.historyManager.addFunctionResponse(call.name, fs.readFileSync(call.args.path, 'utf-8'));
+              break;
+            case 'make_dir':
+              fs.mkdirSync(call.args.path, { recursive: call.args.recursive });
+              client.historyManager.addFunctionResponse(call.name, 'Directory created successfully.');
+              break;
+            case 'delete_file':
+              fs.unlinkSync(call.args.path);
+              client.historyManager.addFunctionResponse(call.name, 'File deleted successfully.');
+              break;
+            case 'delete_dir':
+              fs.rmdirSync(call.args.path, { recursive: call.args.recursive });
+              client.historyManager.addFunctionResponse(call.name, 'Directory deleted successfully.');
+              break;
+            case 'list_dir':
+              client.historyManager.addFunctionResponse(call.name, fs.readdirSync(call.args.path).join('\n'));
+              break;
+            case 'https_request':
+              try {
+                const response = await fetch(call.args.url, {
+                  method: call.args.method,
+                  headers: call.args.headers,
+                  body: call.args.body
+                });
+                client.historyManager.addFunctionResponse(call.name, await response.text());
+              } catch (error: any) {
+                client.historyManager.addFunctionResponse(call.name, error.message);
+              }
+              break;
+            case 'screenshot':
+              try {
+                // Define a default path in the temp directory if none provided
+                const defaultFilename = `screenshot-${Date.now()}.png`;
+                const outputPath = call.args.path || path.join('./data', defaultFilename);
+
+                console.log(`[Server] Taking screenshot using library. Path: ${outputPath}`);
+
+                // Use the screenshot-desktop library
+                const imgPath = await screenshot({ filename: outputPath, format: 'png' });
+
+                client.historyManager.addFunctionResponse(call.name, `Screenshot salva.`);
+                client.historyManager.addImage("image/png", fs.readFileSync(imgPath, 'base64'));
+                console.log(`[Server] Screenshot successful: ${imgPath}`);
+              } catch (error: any) {
+                console.error(`[Server] Screenshot failed:`, error);
+                client.historyManager.addFunctionResponse(call.name, `Error taking screenshot: ${error.message || 'Unknown error'}`);
+              }
               break;
           }
         }
@@ -101,7 +150,7 @@ wss.on('error', (error) => {
         response.text && client.historyManager.addText('model', response.text);
       }
 
-      console.log(`Gemini (Client ${targetClientId}) > ${response.text}`);
+      response.text && console.log(`Gemini (Client ${targetClientId}) > ${response.text}`);
     } catch (error: any) {
       console.error(`[Server] Failed  to get response from Client${targetClientId}:`, error.message);
     }
