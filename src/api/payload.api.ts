@@ -1,16 +1,16 @@
 import { Content } from "../models/content.model";
 
-type Type = (ObjectType | ArrayType | { type: "string" | "number" | "boolean"; }) & { description?: string };
+type Type = (ObjectType | ArrayType | { type: "STRING" | "NUMBER" | "BOOLEAN"; }) & { description?: string };
 
 interface ArrayType {
-  type: "array";
+  type: "ARRAY";
   items: {
     type: Type;
   }
 }
 
 interface ObjectType {
-  type: "object";
+  type: "OBJECT";
   required?: string[];
   properties: {
     [key: string]: Type;

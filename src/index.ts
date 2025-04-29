@@ -1,7 +1,8 @@
 import { WebSocketServer } from 'ws';
 import readline from 'readline/promises';
-import { v4 as uuidv4 } from 'uuid';
 import { GeminiClient } from './gemini_client';
+import fs from 'fs';
+import { exec } from 'child_process';
 
 type Callback = (...args: any[]) => void;
 
@@ -70,14 +71,39 @@ wss.on('error', (error) => {
     }
 
     try {
-      const response = await client.historyManager
+      let response = await client.historyManager
         .addText('user', input)
         .getResponse();
 
-      client.historyManager.addText('model', response);
-      console.log(`Gemini (Client ${targetClientId}) > ${response}`);
+      response.text && client.historyManager.addText('model', response.text);
+
+      if (response.functionCalls) {
+        for (const call of response.functionCalls) {
+          client.historyManager.addFunctionCall(call.name, call.args);
+          switch (call.name) {
+            case 'create_file':
+              fs.writeFileSync(call.args.path, call.args.content);
+              client.historyManager.addFunctionResponse(call.name, 'File created successfully.');
+              break;
+            case 'execute_command':
+              exec(call.args.command, (error, stdout, stderr) => {
+                client.historyManager.addFunctionResponse(call.name, stdout);
+                console.log(`Gemini (Client ${targetClientId}) > ${stdout}`);
+              });
+              break;
+            case 'read_file':
+              client.historyManager.addFunctionResponse(call.name, fs.readFileSync(call.args.path, 'utf-8'));
+              break;
+          }
+        }
+
+        response = await client.historyManager.getResponse();
+        response.text && client.historyManager.addText('model', response.text);
+      }
+
+      console.log(`Gemini (Client ${targetClientId}) > ${response.text}`);
     } catch (error: any) {
-      console.error(`[Server] Failed to get response from Client ${targetClientId}:`, error.message);
+      console.error(`[Server] Failed  to get response from Client${targetClientId}:`, error.message);
     }
   }
 

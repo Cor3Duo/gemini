@@ -13,9 +13,9 @@ export class GeminiClient {
   }
 
   send(object: Payload) {
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<{ text: string, functionCalls?: { name: string, args: { [key: string]: any } }[] }>((resolve, reject) => {
       this._ws.once('message', (data) => {
-        resolve(data.toString());
+        resolve(JSON.parse(data.toString()));
       });
 
       this._ws.send(JSON.stringify(object));
